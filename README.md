@@ -1,1 +1,1 @@
-# spurious-consensus
+Repository data and code for the article, "Spurious inference in consensus emergence modeling due to the distinguishability problem."

@@ -1,0 +1,149 @@
+---
+title: "Appendix"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE, echo = F, message = F, warning = F}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tseries)
+library(plm)
+library(kableExtra)
+```
+
+\begin{center}
+Practical Example - Assessing Random Walks and Autoregression Before Fitting CEMs
+\end{center}
+
+
+\newpage
+
+The data were created via a true CEM process, consistent with prior work in Lang, Bliese, and Runge (2021). The data are stored in an object called `df`. Load the dataframe into your R session with
+
+```{r}
+
+df <- read.csv(
+  "https://raw.githubusercontent.com/cdishop/spurious-consensus/master/data/cem.csv"
+  )
+
+```
+
+
+\
+
+Data Snippet:
+
+\
+
+```{r, echo = F}
+
+df[1:5, ] %>%  kbl(booktabs = T) %>% kable_styling(latex_options = "hold_position")
+
+```
+
+## Step 1
+
+In the first step, observations are checked against random walks.
+
+\
+
+Check the series of a single individual for a random walk:
+
+```{r, warning = F, message = F}
+library(tidyverse)
+library(tseries)
+library(plm)
+
+oneperson <- df %>% 
+  filter(id == unique(df$id)[1]) %>% 
+  filter(group == unique(df$group)[1])
+
+adf.test(oneperson$y)
+```
+
+\
+
+Based on the test result, the trajectory of a single individual is inconsistent with a random walk. 
+
+\newpage
+
+Conduct the same test across all individuals and groups.
+
+```{r, warning = F, message = F, eval = F}
+
+people <- length(unique(df$id))
+groups <- length(unique(df$group))
+savetests <- numeric(people*groups)
+counter <- 0
+for(k in 1:groups){
+  
+  for(person in 1:people){
+    counter <- counter + 1
+    
+    usedf <- df %>% 
+      filter(id == unique(df$id)[person]) %>% 
+      filter(group == k)
+    
+    result <- adf.test(usedf$y)$p.value
+    savetests[counter] <- result
+    
+  }
+  
+}
+
+sum(savetests < 0.05) / counter
+
+```
+```{r, echo = F}
+
+print('[1] 0.87')
+
+```
+
+87% were not consistent with random walks. 
+
+\newpage
+
+## Step 2
+
+In the second step, observations are checked for autoregressive effects.
+
+```{r, warning = F, message = F, eval = T}
+library(nlme)
+noauto <- lme(y ~ 1,
+              random = ~ time | group / id,
+              data = df,
+              control = list(opt = "optim"))
+withauto <- lme(y ~ 1,
+                random = ~ time | group / id,
+                data = df,
+                control = list(opt = "optim"),
+                correlation = corARMA(p = 1))
+
+anova(noauto, withauto)
+```
+
+
+\
+
+The unconditional model without autoregressive effects is retained. 
+
+## Step 3
+
+Having assessed random walks and autoregressive effects, one can proceed with CEM. Fitting CEM models is well-described in existing articles. See in-text references. 
+
+```{r, eval = F}
+
+library(nlme)
+step1<-lme(y ~ time, random = list(group=pdDiag(~1),id=pdSymm(~1)),
+           data=df)
+step2a<-update(step1,random = list(group=pdDiag(~time),id=pdSymm(~1))) 
+step2b<-update(step2a,random = list(group=pdSymm(~time),id=pdSymm(~1))) 
+step3<-update(step2b,weights=varExp(form = ~ time),
+              control = list(opt = "optim"))
+summary(step3)$modelStruct$varStruct 
+
+```
+
